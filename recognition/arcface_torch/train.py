@@ -63,8 +63,12 @@ def main(args):
         cfg.num_workers
     )
 
-    backbone = get_model(
-        cfg.network, dropout=0.0, fp16=cfg.fp16, num_features=cfg.embedding_size).cuda()
+    if "xnor" in cfg.keys() and cfg.xnor:
+        backbone = get_model(
+            cfg.network, bitwidth=cfg.abw, weight_bitwidth=cfg.wbw).cuda()
+    else:
+        backbone = get_model(
+            cfg.network, dropout=0.0, fp16=cfg.fp16, num_features=cfg.embedding_size).cuda()
 
     backbone = torch.nn.parallel.DistributedDataParallel(
         module=backbone, broadcast_buffers=False, device_ids=[args.local_rank], bucket_cap_mb=16,
@@ -160,10 +164,29 @@ def main(args):
                 torch.nn.utils.clip_grad_norm_(backbone.parameters(), 5)
                 amp.step(opt)
                 amp.update()
+            elif cfg.xnor:
+                """
+                amp.scale(loss).backward()
+                amp.unscale_(opt)
+                torch.nn.utils.clip_grad_norm_(backbone.parameters(), 5)
+                """
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(backbone.parameters(), 5)
+                for p in backbone.modules():
+                    if hasattr(p, 'weight_org'):
+                        p.weight.data.copy_(p.weight_org)
+                """
+                amp.step(opt)
+                amp.update()
+                """
+                opt.step()
+                for p in backbone.modules():
+                    if hasattr(p, 'weight_org'):
+                        p.weight_org.copy_(p.weight.data.clamp_(-1,1)) #not (-0.99, 0.99)?
             else:
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(backbone.parameters(), 5)
-                opt.step()
+                
 
             opt.zero_grad()
             lr_scheduler.step()

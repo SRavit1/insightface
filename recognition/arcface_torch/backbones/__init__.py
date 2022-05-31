@@ -1,4 +1,6 @@
 from .iresnet import iresnet18, iresnet34, iresnet50, iresnet100, iresnet200
+from .resnet_dense_xnor import resnet18 as resnet18_dense_xnor
+
 from .mobilefacenet import get_mbf
 
 
@@ -6,6 +8,8 @@ def get_model(name, **kwargs):
     # resnet
     if name == "r18":
         return iresnet18(False, **kwargs)
+    if name == "r18_xnor":
+        return resnet18_dense_xnor(**kwargs)
     elif name == "r34":
         return iresnet34(False, **kwargs)
     elif name == "r50":
